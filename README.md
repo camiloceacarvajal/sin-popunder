@@ -76,7 +76,7 @@ para saltar y una ✕ para cerrarla. `Esc` también la cierra. Se retira sola a 
 tapando el ending si decides no saltar. Con 0 segundos no se va nunca.
 
 Lo interesante es *por qué esto solo puede hacerlo una extensión*: el `<video>`
-no está en jkanime, está dentro de un iframe de streamwish, desu o mega, que son
+no está en la página principal, está dentro de un iframe de un reproductor externo, que son
 otros dominios. La página de arriba tiene prohibido leer `video.currentTime`.
 Los content scripts de esta extensión entran en **todos** los marcos, así que sí
 pueden. De ahí el reparto:
@@ -96,7 +96,7 @@ descolocarla ni sus scripts leerla.
 **Cómo averigua cuál es el siguiente.** Primero calcula a mano la dirección que
 debería tener (el último número de la ruta, +1) y *después* mira si esa
 dirección está enlazada en la página. Nunca al revés, y nunca por el texto del
-enlace: jkanime tiene un botón que dice «Siguiente» que **no** es el episodio
+enlace: el sitio de referencia tiene un botón que dice «Siguiente» que **no** es el episodio
 siguiente, es la paginación de la lista de episodios. Fiarse del texto te manda
 al sitio equivocado. Hay una prueba dedicada a esa trampa.
 
@@ -105,7 +105,7 @@ dirección no está confirmada en la lista, la tarjeta lo dice.
 
 **Cómo encuentra el vídeo.** La primera versión solo escuchaba el evento
 `timeupdate` en fase de captura sobre `document`. Sobre el papel basta; en
-jkanime no saltó, y desde fuera no había manera de saber cuál de los eslabones
+el sitio no saltó, y desde fuera no había manera de saber cuál de los eslabones
 falló. Ahora hace las dos cosas a la vez: escucha el evento **y** mira el reloj
 cada dos segundos, buscando el `<video>` también dentro de los shadow DOM
 abiertos, que es donde algunos reproductores lo esconden. El paseo por todos los
@@ -248,7 +248,7 @@ extensión muestra en vivo si esa pestaña cuenta como *viendo anime* o
 otras extensiones **nunca** se cierran ni se rescatan. Parece obvio, pero la
 Capa B cerraba cualquier pestaña abierta desde un sitio vigilado, y
 `brave://extensions/` se parsea con hostname `extensions` — distinto de
-`jkanime.net`, así que entraba de lleno en la regla y se cerraba sola. El
+el dominio del propio sitio, así que entraba de lleno en la regla y se cerraba sola. El
 resultado era que no se podía llegar a la página de extensiones para apagar la
 extensión. Hay pruebas dedicadas a las cuatro familias de direcciones, más un
 control que comprueba que un anuncio http de verdad sí se sigue cerrando.
@@ -276,14 +276,15 @@ el contador. Sirve para no tener que adivinar por qué la extensión hizo algo.
 
 Solo actúa en los sitios de la lista, nunca en el resto de la web — así jamás
 rompe un popup legítimo de banco o de "iniciar sesión con Google". Vienen
-cargados jkanime, animeflv, tioanime, monoschinos, animelatinohd, animeonline y
+cargados los dominios de la lista de `src/background.js` (jkanime, animeflv,
+tioanime, monoschinos, animelatinohd, animeonline) y
 hentaila; se añaden más desde el ícono con **Añadir el sitio de esta pestaña**.
 
 Los iframes del reproductor viven en otros dominios (streamwish, filemoon, etc.).
 Se activan igual porque la extensión mira quién es la página de arriba vía
 `location.ancestorOrigins`, no el dominio del iframe. No hace falta añadirlos.
 
-## Qué usa jkanime en concreto
+## El caso de referencia
 
 Diagnosticado sobre la página real. Carga dos redes de anuncios además de sus
 propios scripts: `cvt-s2.agl003.com` y `ca.luteousoecus.com`. Las técnicas son:
@@ -317,7 +318,7 @@ técnica todavía; pásame esas líneas y añado el parche.
 Hay dos bancos. Ambos se abren directo en el navegador, se autoejecutan y
 pintan PASA/FALLA sin necesidad de instalar la extensión.
 
-`test/banco-siguiente.html` reproduce la lista de episodios de jkanime, con su
+`test/banco-siguiente.html` reproduce la lista de episodios del sitio de referencia, con su
 botón trampa de paginación incluido, y comprueba las tres formas de URL que usan
 estos sitios (`/serie/12/`, `/ver/serie-12`, `/ver/serie-episodio-12`), el
 acarreo del 9 al 10, el último episodio, y que no mezcle series ni dominios.
@@ -334,7 +335,7 @@ preferencia guardada no pulsa nada. Estado: 37/37 pasan, y
 verificado a la inversa rompiendo el código a propósito (`p.n + 2`), que da 2
 fallos. El botón
 «Ver la tarjeta» la muestra para mirarla con los ojos; la cuenta atrás navega de
-verdad, y por eso apunta al propio banco y no a jkanime.
+verdad, y por eso apunta al propio banco y no al sitio real.
 
 `test/banco-siguiente.html` cubre las direcciones de episodio, la detección del
 vídeo, la elección de servidor y **el gesto de pantalla completa**, con trampas
