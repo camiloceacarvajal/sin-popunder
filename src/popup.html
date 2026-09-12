@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Sin Popunder</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>Sin Popunder</h1>
+    <label class="switch">
+      <input type="checkbox" id="enabled">
+      <span class="slider"></span>
+    </label>
+  </header>
+
+  <p class="stat"><strong id="count">0</strong> emergentes neutralizadas</p>
+
+  <section>
+    <h2>Modo</h2>
+    <label class="radio">
+      <input type="radio" name="mode" value="silencioso">
+      <span><b>Silencioso</b><small>Nada se abre. La pagina cree que si.</small></span>
+    </label>
+    <label class="radio">
+      <input type="radio" name="mode" value="apoyo">
+      <span><b>Apoyo al sitio</b><small>Se abre al fondo, carga unos segundos y se cierra sola.</small></span>
+    </label>
+    <label class="check" id="wrapSecs">
+      Segundos antes de cerrar
+      <input type="number" id="supportSeconds" min="1" max="30" step="1">
+    </label>
+  </section>
+
+  <section>
+    <h2>Opciones</h2>
+    <label class="check">
+      <input type="checkbox" id="forwardClick">
+      Reenviar el clic al reproductor de abajo
+    </label>
+    <label class="check">
+      <input type="checkbox" id="revertRedirect">
+      Rescatar la pestana si el anuncio se la lleva
+    </label>
+    <label class="check">
+      <input type="checkbox" id="focoSoloConVideo">
+      Devolver el foco solo si el episodio esta sonando
+    </label>
+    <label class="check">
+      <input type="checkbox" id="diagnostico">
+      Anotar en el historial cada vez que toco una pestana
+    </label>
+    <p class="estado">Ahora en esta pestana: <strong id="estadoVideo">comprobando...</strong></p>
+    <button id="pause" class="ghost">Pausar 5 minutos</button>
+  </section>
+
+  <section>
+    <h2>Siguiente episodio</h2>
+    <label class="check">
+      <input type="checkbox" id="nextEpisode">
+      Avisar al final del episodio
+    </label>
+    <label class="check" id="wrapUmbral">
+      Segundos antes del final
+      <input type="number" id="nextThreshold" min="5" max="600" step="5">
+    </label>
+    <label class="check" id="wrapDura">
+      Segundos que dura el aviso (0 = no se va)
+      <input type="number" id="nextHideAfter" min="0" max="300" step="5">
+    </label>
+    <label class="check" id="wrapAuto">
+      <input type="checkbox" id="nextAutoplay">
+      Avanzar solo con cuenta atras
+    </label>
+    <label class="check" id="wrapCuenta">
+      Segundos de cuenta atras
+      <input type="number" id="nextCountdown" min="3" max="60" step="1">
+    </label>
+    <label class="check">
+      <input type="checkbox" id="serverAuto">
+      Elegir solo el reproductor de siempre
+    </label>
+    <label class="check">
+      <input type="checkbox" id="nextDebug">
+      Diagnostico: anotar en el historial que ve
+    </label>
+  </section>
+
+  <section>
+    <h2>Sitios vigilados</h2>
+    <div class="addrow">
+      <input type="text" id="newSite" placeholder="ejemplo.com">
+      <button id="addSite">Anadir</button>
+    </div>
+    <button id="addCurrent" class="ghost">Anadir el sitio de esta pestana</button>
+    <ul id="sites"></ul>
+  </section>
+
+  <section>
+    <h2>Ultimas bloqueadas <button id="clear" class="link">limpiar</button></h2>
+    <ul id="log" class="log"></ul>
+  </section>
+
+  <script src="popup.js"></script>
+</body>
+</html>

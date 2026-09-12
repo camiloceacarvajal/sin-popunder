@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Banco de pruebas - Siguiente episodio</title>
+<style>
+  body { font: 14px system-ui; max-width: 720px; margin: 24px auto; }
+  li { padding: 3px 0; }
+  .ok { color: #157f3d; } .bad { color: #c62828; }
+  #dom { display: none; }
+  button.demo { margin-top: 16px; padding: 8px 14px; font: inherit; }
+</style>
+</head>
+<body>
+<h1>Siguiente episodio</h1>
+<p>Se comprueba de donde saca la direccion del episodio que viene. Es lo unico
+que puede mandarte a la pagina equivocada.</p>
+
+<!-- La fila de reproductores, como en jkanime. Streamwish viene marcado como
+     el activo. "Descargar" y "Comentarios" estan para comprobar que no se
+     toman por servidores. -->
+<div id="servidores">
+  <table><tr>
+    <td><a href="#">Desu</a></td>
+    <td><a href="#">Magi</a></td>
+    <td><a href="#">Okru</a></td>
+    <td><a href="#">Mega</a></td>
+    <td class="active"><a href="#">Streamwish</a></td>
+    <td><a href="#">VOE</a></td>
+    <td><a href="#">Descargar</a></td>
+    <td><a href="#">Comentarios</a></td>
+  </tr></table>
+</div>
+
+<!-- Reproduccion de la lista de episodios de jkanime, con su trampa: el boton
+     que dice "Siguiente" NO es el episodio siguiente, es la paginacion de la
+     lista. Un codigo que se fie del texto del enlace acaba ahi. -->
+<div id="dom">
+  <a href="https://jkanime.net/boushoku-no-berserk/1/">Episodio 1</a>
+  <a href="https://jkanime.net/boushoku-no-berserk/2/">Episodio 2</a>
+  <a href="https://jkanime.net/boushoku-no-berserk/3/">Episodio 3</a>
+  <a href="https://jkanime.net/boushoku-no-berserk/4/">Episodio 4</a>
+  <a href="https://jkanime.net/boushoku-no-berserk/12/">Episodio 12</a>
+  <a href="https://jkanime.net/boushoku-no-berserk/?page=2">Siguiente &rsaquo;</a>
+  <a href="https://jkanime.net/directorio/">Directorio</a>
+  <a href="https://anuncio.example.com/9/">Publicidad con numero</a>
+  <a href="https://jkanime.net/otra-serie/1/">Otra serie</a>
+</div>
+
+<ul id="res"></ul>
+
+<script src="../src/siguiente.js"></script>
+<script>
+const S = globalThis.__sinpopSiguiente;
+const res = document.getElementById('res');
+let fallos = 0;
+function check(nombre, cond) {
+  const li = document.createElement('li');
+  li.className = cond ? 'ok' : 'bad';
+  li.textContent = (cond ? 'PASA  ' : 'FALLA ') + nombre;
+  res.appendChild(li);
+  if (!cond) fallos++;
+}
+
+check('el archivo exporta su logica fuera de la extension', !!S);
+
+// --- cortar la ruta por el ultimo numero ----------------------------------
+const formas = [
+  ['/boushoku-no-berserk/1/',        2, '/boushoku-no-berserk/2/'],   // jkanime
+  ['/ver/boushoku-no-berserk-1',     2, '/ver/boushoku-no-berserk-2'],// animeflv
+  ['/ver/serie-episodio-11',        12, '/ver/serie-episodio-12'],    // monoschinos
+  ['/serie/9/',                     10, '/serie/10/']                 // acarreo
+];
+formas.forEach(([ruta, n, esperado]) => {
+  const p = S.partir(ruta);
+  check('reconoce ' + ruta + ' -> ' + esperado,
+    !!p && p.n === n - 1 && S.armar(p, n) === esperado);
+});
+check('una ruta sin numero no se inventa nada', S.partir('/directorio/') === null);
+check('no confunde el numero de un año en la ruta con un episodio',
+  (() => { const p = S.partir('/serie/temporada-2/'); return !!p && p.n === 2; })());
+
+// --- la trampa: el boton "Siguiente" de la paginacion ----------------------
+const r1 = S.calcularSiguiente('https://jkanime.net/boushoku-no-berserk/1/');
+check('del episodio 1 pasa al 2',
+  !!r1 && r1.url === 'https://jkanime.net/boushoku-no-berserk/2/');
+check('TRAMPA: no se va al "Siguiente" de la paginacion (?page=2)',
+  !!r1 && !r1.url.includes('page='));
+check('marca el 2 como confirmado porque la pagina lo enlaza',
+  !!r1 && r1.n === 2 && r1.confirmado);
+
+// --- limites --------------------------------------------------------------
+const r4 = S.calcularSiguiente('https://jkanime.net/boushoku-no-berserk/4/');
+check('del 4 pasa al 5 aunque el 5 no este enlazado (el 12 si, hay mas serie)',
+  !!r4 && r4.url.endsWith('/5/') && r4.confirmado === false);
+
+const r12 = S.calcularSiguiente('https://jkanime.net/boushoku-no-berserk/12/');
+check('en el ultimo episodio NO ofrece nada', r12 === null);
+
+const rOtra = S.calcularSiguiente('https://jkanime.net/otra-serie/1/');
+check('otra serie sin mas episodios listados: no ofrece', rOtra === null);
+
+// --- no mezclar series ni dominios ----------------------------------------
+const p = S.partir('/boushoku-no-berserk/1/');
+const nums = S.episodiosEnLaPagina(p, 'https://jkanime.net/boushoku-no-berserk/1/');
+check('solo cuenta episodios de ESTA serie', !nums.has(9) && nums.has(12) && nums.size === 5);
+check('ignora enlaces de otro dominio con numero', !nums.has(9));
+
+// --- encontrar el <video> -------------------------------------------------
+// Es lo que fallo en jkanime en la primera version. Un reproductor puede
+// esconder el video dentro de un shadow DOM, donde querySelectorAll('video')
+// de la pagina no llega.
+function videoFalso(dur) {
+  const v = document.createElement('video');
+  Object.defineProperty(v, 'duration', { get: () => dur, configurable: true });
+  Object.defineProperty(v, 'currentTime', { value: 0, writable: true, configurable: true });
+  return v;
+}
+
+check('sin video no devuelve nada', S.buscarVideos().length === 0 && S.elBueno() === null);
+
+const anfitrion = document.createElement('div');
+document.body.appendChild(anfitrion);
+anfitrion.attachShadow({ mode: 'open' }).appendChild(videoFalso(1420));
+check('encuentra un video escondido en un shadow DOM abierto',
+  S.buscarVideos().length === 1);
+check('lo acepta porque dura mas de 4 minutos', !!S.elBueno());
+
+const corto = videoFalso(35);
+document.body.appendChild(corto);
+check('un video de 35s (un anuncio) no se toma por el episodio',
+  S.elBueno() !== corto);
+
+const largo = videoFalso(1420);
+document.body.appendChild(largo);
+check('con varios, se queda con el mas largo', S.elBueno() === largo);
+document.body.removeChild(corto);
+document.body.removeChild(largo);
+document.body.removeChild(anfitrion);
+
+// --- no rendirse al primer fallo ------------------------------------------
+// Este es el fallo que hizo que en jkanime no saliera nada hasta recargar la
+// pagina: se daba por servido ANTES de saber si habia episodio siguiente, y si
+// la consulta fallaba no lo volvia a intentar en todo el episodio.
+{
+  const antes = document.querySelectorAll('#dom a').length;
+  // Una serie que no tiene siguiente: la consulta "falla" y no debe bloquear.
+  const r = S.calcularSiguiente('https://jkanime.net/otra-serie/1/');
+  check('una consulta sin resultado no rompe nada', r === null && antes > 0);
+  // Y la buena sigue funcionando despues, que es lo que antes no pasaba.
+  const r2 = S.calcularSiguiente('https://jkanime.net/boushoku-no-berserk/1/');
+  check('despues de un fallo, la siguiente consulta si responde',
+    !!r2 && r2.url.endsWith('/2/'));
+}
+
+// --- volver a pantalla completa -------------------------------------------
+// No se puede probar la pantalla completa de verdad sin un clic humano (el
+// navegador lo exige), pero si se puede comprobar que la tarjeta se ofrece y
+// que no intenta nada con un clic sintetico, que seria tiempo perdido.
+S.ofrecerPantallaCompleta();
+const hostPC = document.querySelector('[data-sinpop=siguiente]');
+check('ofrece la tarjeta de volver a pantalla completa', !!hostPC);
+check('la tarjeta tapa la esquina de abajo a la derecha',
+  document.elementFromPoint(innerWidth - 100, innerHeight - 45) === hostPC);
+let rechazado = true;
+try {
+  document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+} catch (e) { rechazado = false; }
+check('un clic sintetico no se toma por un gesto tuyo',
+  rechazado && !!document.querySelector('[data-sinpop=siguiente]'));
+S.cerrar();
+check('se puede cerrar', !document.querySelector('[data-sinpop=siguiente]'));
+
+// --- recordar el reproductor ----------------------------------------------
+{
+  // Sin extension instalada nadie le dice que este es un sitio de anime.
+  S.activar();
+  check('reconoce un nombre de reproductor',
+    S.nombreDeServidor({ textContent: ' Streamwish ' }) === 'streamwish');
+  check('NO toma "Descargar" por un reproductor',
+    S.nombreDeServidor({ textContent: 'Descargar' }) === null);
+  check('NO toma por reproductor un parrafo largo que lo mencione',
+    S.nombreDeServidor({ textContent: 'Si Streamwish no te carga, prueba con otro servidor' }) === null);
+
+  const m = S.candidatos();
+  check('encuentra los seis reproductores de la fila', m.size === 6);
+  check('sabe cual esta puesto ya', S.yaEstaPuesto(m.get('streamwish')));
+  check('y sabe que los otros no lo estan', !S.yaEstaPuesto(m.get('magi')));
+
+  // Preferencia: Magi el mas usado -> debe pulsarlo.
+  let pulsado = null;
+  m.forEach((el, n) => el.addEventListener('click', () => { pulsado = n; }));
+  S.ponCuentas({ magi: 9, desu: 2 });
+  S.elegirServidor();
+  check('elige solo el reproductor que mas usas', pulsado === 'magi');
+
+  // Si el favorito no esta en este episodio, va al segundo.
+  pulsado = null;
+  S.ponCuentas({ filemoon: 30, desu: 4 });
+  S.elegirServidor();
+  check('si tu favorito no esta, usa el siguiente mas usado', pulsado === 'desu');
+
+  // Si el favorito ya es el que esta puesto, no lo vuelve a pulsar.
+  pulsado = null;
+  S.ponCuentas({ streamwish: 50 });
+  S.elegirServidor();
+  check('no vuelve a pulsar el que ya estaba puesto', pulsado === null);
+
+  // Sin preferencia guardada no toca nada.
+  pulsado = null;
+  S.ponCuentas({});
+  S.elegirServidor();
+  check('sin preferencia guardada no pulsa nada', pulsado === null);
+}
+
+// --- la prueba que DEBE fallar --------------------------------------------
+// Sin esto el banco no demuestra nada: si todo sale verde siempre, tambien
+// saldria verde con el codigo roto.
+const trampa = S.calcularSiguiente('https://jkanime.net/boushoku-no-berserk/1/');
+const detecta = !(trampa && trampa.url === 'https://jkanime.net/boushoku-no-berserk/99/');
+check('el banco sabe distinguir un resultado malo (control)', detecta);
+
+window.__fallos = fallos;
+const resumen = document.createElement('h2');
+resumen.textContent = fallos === 0 ? 'Todo pasa' : fallos + ' fallo(s)';
+document.body.appendChild(resumen);
+
+// --- ver la tarjeta con los ojos ------------------------------------------
+// ---- el gesto que devuelve la pantalla completa -------------------------
+// La regresion que encerraba la pestana: se armaba un keydown sin filtro, y
+// Alt+Tab / Ctrl+Tab tambien son keydown. Intentar irte te metia en pantalla
+// completa. Estas comprobaciones existen para que no vuelva a pasar.
+const g = S.gestoValido;
+const tecla = (k, mod) => Object.assign(
+  { type: 'keydown', isTrusted: true, key: k, altKey: false, ctrlKey: false, metaKey: false },
+  mod || {});
+const puntero = (boton) => ({ type: 'pointerdown', isTrusted: true, button: boton });
+
+check('TRAMPA: Alt+Tab NO devuelve la pantalla completa', !g(tecla('Tab', { altKey: true })));
+check('TRAMPA: Ctrl+Tab NO devuelve la pantalla completa', !g(tecla('Tab', { ctrlKey: true })));
+check('TRAMPA: Ctrl+W NO devuelve la pantalla completa', !g(tecla('w', { ctrlKey: true })));
+check('TRAMPA: Alt+Flecha (atras) tampoco', !g(tecla('ArrowLeft', { altKey: true })));
+check('una tecla cualquiera no cuenta como gesto', !g(tecla('ArrowDown')));
+check('Tab a secas tampoco', !g(tecla('Tab')));
+check('el espacio si cuenta (es darle al play)', g(tecla(' ')));
+check('la f si cuenta (es pantalla completa)', g(tecla('f')));
+check('un clic principal si cuenta', g(puntero(0)));
+check('el clic derecho no', !g(puntero(2)));
+check('un evento sintetico nunca vale', !g(Object.assign(tecla(' '), { isTrusted: false })));
+
+const campo = document.createElement('input');
+document.body.appendChild(campo);
+campo.focus();
+check('un espacio escrito en un campo de texto no dispara nada', !g(tecla(' ')));
+campo.blur();
+campo.remove();
+
+const b = document.createElement('button');
+b.className = 'demo';
+b.textContent = 'Ver la tarjeta';
+b.addEventListener('click', () => {
+  // Ojo con la direccion: la cuenta atras navega DE VERDAD al terminar. Se
+  // apunta a este mismo banco para no salir del equipo. (Con jkanime aqui, el
+  // banco se iba solo al sitio a los 10 segundos.)
+  S.ajustar({ nextAutoplay: true, nextCountdown: 10 });
+  S.mostrar({ url: location.pathname + '?llegue=1', n: 2, confirmado: true });
+});
+if (location.search.includes('llegue=1')) {
+  const av = document.createElement('h2');
+  av.className = 'ok';
+  av.textContent = 'La cuenta atras navego sola hasta aqui: el salto funciona.';
+  document.body.appendChild(av);
+}
+document.body.appendChild(b);
+</script>
+</body>
+</html>

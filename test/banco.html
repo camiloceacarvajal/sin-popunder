@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Banco de pruebas - Sin Popunder</title>
+<style>
+  body { font: 14px system-ui; max-width: 640px; margin: 24px auto; }
+  li { padding: 3px 0; }
+  .ok { color: #157f3d; } .bad { color: #c62828; }
+  #reproductor { position: relative; width: 300px; height: 120px; background: #222; color: #fff; }
+  #play { position: absolute; inset: 0; display: grid; place-items: center; }
+  #trampa { position: absolute; inset: 0; z-index: 5; }
+</style>
+</head>
+<body>
+<h1>Banco de pruebas</h1>
+<div id="reproductor">
+  <div id="play">reproductor</div>
+  <a id="trampa" href="https://anuncio.example.com/pop" target="_blank"></a>
+</div>
+<ul id="res"></ul>
+
+<script src="../src/blocker.js"></script>
+<script>window.__trasUnaCarga = window.open;</script>
+<!-- A proposito dos veces: al recargar la extension se reinyecta en las
+     pestanas ya abiertas, y sin la guarda la segunda pasada guardaria como
+     "nativa" la funcion que ya parcheo la primera. -->
+<script src="../src/blocker.js"></script>
+<script>window.__trasDosCargas = window.open;</script>
+<script>
+// Simulamos lo que hace bridge.js: activar el bloqueo para este documento.
+window.dispatchEvent(new CustomEvent('__sinpop_cfg', {
+  detail: JSON.stringify({ active: true, mode: 'silencioso', forwardClick: true })
+}));
+
+const res = document.getElementById('res');
+let fallos = 0;
+function check(nombre, cond) {
+  const li = document.createElement('li');
+  li.className = cond ? 'ok' : 'bad';
+  li.textContent = (cond ? 'PASA  ' : 'FALLA ') + nombre;
+  res.appendChild(li);
+  if (!cond) fallos++;
+}
+
+// Contamos lo que la extension reporta al mundo aislado.
+const reportes = [];
+window.addEventListener('__sinpop_hit', (e) => reportes.push(JSON.parse(e.detail)));
+
+// 1. window.open devuelve una ventana falsa, no null, y no abre nada.
+const w = window.open('https://anuncio.example.com/pop', '_blank');
+check('window.open devuelve un objeto (no null)', !!w);
+check('window.open no lanza al usarse como ventana real', (() => {
+  try {
+    w.focus(); w.blur(); w.moveTo(0,0); w.document.write('x');
+    w.location.href = 'https://otro.example.com';
+    const s = w.metodoQueNoExiste;
+    w.close();
+    return w.closed === true && typeof s === 'function';
+  } catch (e) { return false; }
+})());
+check('window.open se ve nativa en toString',
+  window.open.toString() === 'function open() { [native code] }');
+check('Function.prototype.toString sigue sirviendo para el resto',
+  (function foo(){}).toString().includes('foo'));
+
+// 2. anchor programatico con target=_blank
+const a = document.createElement('a');
+a.href = 'https://anuncio.example.com/via-click';
+a.target = '_blank';
+document.body.appendChild(a);
+a.click();
+check('a.click() con target=_blank queda anulado',
+  reportes.some(r => r.how === 'a.click()'));
+
+// 3. evento de raton sintetico sobre el anchor
+a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+check('MouseEvent sintetico sobre el anchor queda anulado',
+  reportes.some(r => r.how === 'dispatchEvent'));
+
+// 4. formulario con target=_blank
+const f = document.createElement('form');
+f.action = 'https://anuncio.example.com/form';
+f.target = '_blank';
+document.body.appendChild(f);
+f.submit();
+check('form.submit() con target=_blank queda anulado',
+  reportes.some(r => r.how === 'form.submit()'));
+
+// 5b. cargarlo dos veces no lo envuelve dos veces
+check('cargar blocker.js dos veces no duplica el parche',
+  window.__trasUnaCarga === window.__trasDosCargas);
+check('la marca de "ya cargado" no se ve en Object.keys(window)',
+  !Object.keys(window).includes('__sinpopCargado') &&
+  !!Object.getOwnPropertyDescriptor(window, '__sinpopCargado'));
+
+// 5. no tocamos lo legitimo del mismo sitio
+const local = document.createElement('a');
+local.href = location.href;
+local.target = '_blank';
+let navegoLocal = false;
+local.addEventListener('click', (e) => { navegoLocal = true; e.preventDefault(); });
+document.body.appendChild(local);
+local.click();
+check('un a.click() al mismo dominio NO se toca', navegoLocal);
+
+window.__fallos = fallos;
+window.__reportes = reportes;
+const resumen = document.createElement('h2');
+resumen.textContent = fallos === 0 ? 'Todo pasa' : fallos + ' fallo(s)';
+document.body.appendChild(resumen);
+</script>
+</body>
+</html>
