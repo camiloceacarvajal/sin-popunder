@@ -1,18 +1,42 @@
 # Sin Popunder
 
-Extensión para Brave/Chrome que mata las ventanas emergentes de los sitios de
+Extensión MV3 para Chrome/Brave que neutraliza los popunder de los sitios de
 streaming **sin bloquear la publicidad**, para no gatillar los avisos de
 "desactiva tu adblock".
 
+> **La idea central:** bloquear `window.open` devolviendo `null` no funciona.
+> El popunder comprueba `!ventana.closed` y, si le devuelves `null`, sabe que
+> está siendo bloqueado y reintenta por otra vía. Lo que sí funciona es
+> **devolverle una ventana falsa** que se comporta como una real: el script
+> cree que ganó y no vuelve a intentarlo.
+
+| | |
+|---|---|
+| Manifiesto | MV3, dos capas independientes (`MAIN` + `ISOLATED`) |
+| Red | ninguna. Todo el estado vive en `storage.local` |
+| Pruebas | **37/37**, en dos bancos que corren en el navegador sin instalar nada |
+| Extra | detecta el fin del episodio y ofrece pasar al siguiente |
+
 ## Instalar
 
-1. Abre `brave://extensions`
-2. Activa **Modo de desarrollador** (arriba a la derecha)
-3. **Cargar descomprimida** → elige la carpeta `~/Documentos/sin-popunder`
-4. Ancla el ícono morado a la barra si quieres ver el contador
+1. Clona el repositorio.
+2. Abre `chrome://extensions` (o `brave://extensions`).
+3. Activa **Modo de desarrollador**, arriba a la derecha.
+4. **Cargar descomprimida** → elige la carpeta del repositorio.
+5. Ancla el ícono a la barra si quieres ver el contador de bloqueos.
 
-No hay que reiniciar Brave. Si editas el código, vuelve a `brave://extensions` y
-pulsa recargar en la tarjeta de la extensión.
+No hay que reiniciar el navegador. Si editas el código, vuelve a la página de
+extensiones y pulsa recargar en la tarjeta.
+
+## Probar sin instalar
+
+```bash
+xdg-open test/banco-siguiente.html   # 37 comprobaciones
+xdg-open test/banco.html
+```
+
+Ambos bancos se autoejecutan y pintan PASA/FALLA. Llevan **un control que debe
+fallar**: si ese control sale verde, el banco está roto y no prueba nada.
 
 ## Cómo funciona
 
